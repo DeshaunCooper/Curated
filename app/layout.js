@@ -6,16 +6,3 @@ export default function RootLayout({ children }) {
     </html>
   );
 }
-```
-- Click **Commit new file**
-
----
-
-**Step 4 — Check your repo root looks like this:**
-```
-CuratedApp.jsx
-package.json
-next.config.js
-app/
-  page.js
-  layout.js
