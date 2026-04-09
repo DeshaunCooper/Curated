@@ -1,0 +1,694 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>CURATED</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{background:#0B0B0B;font-family:'IBM Plex Sans',system-ui,sans-serif;color:#F0F0F0;-webkit-font-smoothing:antialiased;overflow-x:hidden}
+  ::-webkit-scrollbar{width:4px}::-webkit-scrollbar-track{background:#0B0B0B}::-webkit-scrollbar-thumb{background:#333;border-radius:2px}
+  @keyframes up{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+  @keyframes eq{from{transform:scaleY(0.25)}to{transform:scaleY(1)}}
+  @keyframes pulse{0%,100%{opacity:0.5}50%{opacity:1}}
+  @keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
+  @keyframes fadeIn{from{opacity:0}to{opacity:1}}
+  input:focus,textarea:focus,select:focus{border-color:#C4921A!important;outline:none}
+  .srch::placeholder{color:#484848}
+  .pill:hover{border-color:#C4921A!important;color:#C4921A!important}
+  .vc:hover .vinyl-peek{opacity:0.95!important;right:-6px!important}
+  .vc:hover .vc-controls{opacity:1!important}
+  .vc:hover .hook-btn{opacity:1!important}
+</style>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=IBM+Plex+Sans:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet"/>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const { useState, useRef, useEffect } = React;
+
+// ─── CONFIG ──────────────────────────────────────────────────────────────────
+const SUPA_URL  = "https://bxcxpxsnvjysgjpycpxz.supabase.co";
+const SUPA_KEY  = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJ4Y3hweHNudmp5c2dqcHljcHh6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU3Mzc0NDcsImV4cCI6MjA5MTMxMzQ0N30.ZTGkrn7CVh96pUbPkOUQIClOb9QujXJFA9AscDlBles";
+const sb = supabase.createClient(SUPA_URL, SUPA_KEY);
+
+// ─── SEARCH MAP ──────────────────────────────────────────────────────────────
+const SM = {
+  pregame:["hype","aggressive","energetic","dark trap"],
+  hype:["aggressive","energetic","dark trap","hip-hop"],
+  "locker room":["motivational","hype","hip-hop","soul"],
+  highlight:["action","energetic","cinematic","hype"],
+  sad:["ambient","emotional","soul","r&b"],dark:["dark trap","tension","cinematic"],
+  angry:["dark trap","drill","trap","action"],happy:["pop","soul","gospel"],
+  uplifting:["gospel","pop","soul","orchestral"],romantic:["r&b","soul","jazz","pop"],
+  chill:["lo-fi","ambient","jazz","r&b"],intense:["dark trap","action","tension"],
+  epic:["orchestral","cinematic","action"],emotional:["ambient","r&b","soul","orchestral"],
+  summer:["pop","afrobeats","r&b"],night:["lo-fi","r&b","dark trap","ambient"],
+  film:["cinematic","orchestral","ambient"],trailer:["cinematic","action","orchestral"],
+  villain:["dark trap","tension","cinematic"],hero:["orchestral","cinematic","action"],
+  chase:["action","electronic","hybrid"],menu:["ambient","lo-fi","cinematic","atmospheric"],
+  loop:["ambient","lo-fi","atmospheric"],"late night":["lo-fi","r&b","ambient"],
+  workout:["energetic","trap","hip-hop"],sports:["hype","energetic","action","cinematic"],
+  comeback:["emotional","cinematic","orchestral"],championship:["orchestral","cinematic","epic"],
+  documentary:["emotional","cinematic","ambient"],"spider-man":["action","electronic","cinematic"],
+  batman:["dark trap","cinematic","tension"],interstellar:["ambient","cinematic","orchestral"],
+  nolan:["cinematic","orchestral","tension"],drake:["r&b","hip-hop","trap"],
+  piano:["ambient","orchestral","emotional"],"no lyrics":["instrumental","ambient","cinematic"],
+};
+
+function search(q, tracks) {
+  if (!q.trim()) return [];
+  const lq = q.toLowerCase();
+  let genres = [];
+  for (const [k,v] of Object.entries(SM)) { if (lq.includes(k)) genres=[...genres,...v]; }
+  const sc = t => {
+    let s=0;
+    if ((t.title||"").toLowerCase().includes(lq)) s+=10;
+    if ((t.description||"").toLowerCase().includes(lq)) s+=5;
+    (t.use_cases||[]).forEach(u=>{if(u.toLowerCase().includes(lq))s+=8;});
+    (t.tags||[]).forEach(tag=>{if(tag.toLowerCase().includes(lq))s+=4;if(genres.some(g=>g.toLowerCase()===tag))s+=3;});
+    if((t.genre||"").toLowerCase().includes(lq))s+=6;
+    if((t.mood||"").toLowerCase().includes(lq))s+=6;
+    genres.forEach(g=>{if((t.genre||"").toLowerCase().includes(g))s+=3;});
+    return s;
+  };
+  return tracks.map(t=>({t,s:sc(t)})).filter(x=>x.s>0).sort((a,b)=>b.s-a.s).map(x=>x.t);
+}
+
+// ─── CONSTANTS ───────────────────────────────────────────────────────────────
+const ADMIN_PASS = "curated2024";
+const GENRES = ["Dark Trap","Hip-Hop","R&B","Orchestral","Cinematic","Ambient","Electronic","Trap","Gospel","Jazz","Soul","Pop","Lo-Fi","Afrobeats","Drill","Hybrid"];
+const USE_CASES = ["Pregame Hype","Locker Room","Highlight Reel","Late Night Menu","Emotional Cutscene","Championship Moment","Fighter Walkout","Documentary","Trailer","Comeback Win"];
+const GRADS = [
+  "linear-gradient(135deg,#1a0a2e,#0d0d1a)","linear-gradient(135deg,#0a1a0d,#001a08)",
+  "linear-gradient(135deg,#1a0505,#2a0808)","linear-gradient(135deg,#0a1018,#050e1a)",
+  "linear-gradient(135deg,#1a1000,#2a1800)","linear-gradient(135deg,#160008,#0d0010)",
+  "linear-gradient(135deg,#0a1a1a,#001a20)","linear-gradient(135deg,#0a0a18,#10101a)",
+];
+const D = {
+  bg:"#0B0B0B",bg2:"#111",bg3:"#171717",bg4:"#1E1E1E",bg5:"#252525",
+  border:"#1E1E1E",border2:"#2A2A2A",border3:"#333",
+  text:"#F0F0F0",text2:"#C0C0C0",text3:"#808080",text4:"#484848",
+  gold:"#C4921A",goldL:"#E0A820",green:"#2A8A4A",red:"#E05050",
+};
+const uid = () => Math.random().toString(36).slice(2,9).toUpperCase();
+const fmtDate = () => new Date().toLocaleDateString("en-US",{year:"numeric",month:"long",day:"numeric"});
+
+function contract(track, tier, b) {
+  const price = tier==="sync"?track.price_sync:tier==="bundle"?track.price_bundle:track.price_exclusive;
+  const ref = `CUR-${uid()}-${new Date().getFullYear()}`;
+  const L="─".repeat(52);
+  return `CURATED · MUSIC LICENSING AGREEMENT\nRef: ${ref} · Date: ${fmtDate()}\n${L}\nLICENSOR: [YOUR LEGAL NAME] · CURATED · hello@wedesignsstudio.com\nLICENSEE: ${b.name} · ${b.company} · ${b.email}\nARTIST: ${b.artist}  PROJECT: ${b.project}\n${L}\nTRACK: "${track.title}" · ${track.genre} · ${track.bpm} BPM\nLICENSE: ${tier.toUpperCase()} LICENSE · $${price} USD (non-refundable)\nRIGHTS: 100% Master Owned · Publishing Cleared · No Samples\n\nAI DISCLOSURE: Created under human creative direction of [YOUR LEGAL NAME].\nAI used as instrument of production. All IP rights vest in human\nauthor under 17 U.S.C. § 101 et seq.\n${L}\nROYALTIES\nONE-TIME: $${price} USD · Non-refundable\nPERFORMANCE: 100% to Licensor via PRO\nMECHANICAL: All reproductions\nNO BUYOUT unless Exclusive tier.\n${L}\nSPLIT SHEET\nComposition: [YOUR LEGAL NAME] — 100%\nMaster: [YOUR LEGAL NAME] — 100%\nSamples: NONE\n${L}\nENFORCEMENT: Breach = $150K/infringement + DMCA takedown.\n${L}\nLICENSOR: _________________________  Date: ${fmtDate()}\nLICENSEE: _________________________  Date: __________\n${b.name}\n${L}\nCURATED © ${new Date().getFullYear()} · Ref: ${ref}`.trim();
+}
+
+// ─── ATOMS ───────────────────────────────────────────────────────────────────
+const Tag = ({label,c,sm}) => <span style={{background:(c||D.gold)+"18",color:c||D.gold,border:`1px solid ${(c||D.gold)+"28"}`,fontSize:sm?8:9,padding:sm?"1px 6px":"2px 8px",borderRadius:3,fontWeight:700,letterSpacing:.7,textTransform:"uppercase",whiteSpace:"nowrap"}}>{label}</span>;
+
+const Btn = ({ch,onClick,v="gold",sm,full,disabled,sx={}}) => {
+  const vs={gold:{background:`linear-gradient(135deg,${D.gold},${D.goldL})`,color:"#0B0B0B",boxShadow:`0 3px 12px ${D.gold}38`,border:"none"},ghost:{background:"transparent",color:D.text3,border:`1px solid ${D.border3}`},dark:{background:D.bg3,color:D.text2,border:`1px solid ${D.border2}`},green:{background:D.green+"18",color:D.green,border:`1px solid ${D.green}30`},red:{background:"transparent",color:D.red,border:`1px solid ${D.red}28`},outline:{background:"transparent",color:D.gold,border:`1px solid ${D.gold}60`}};
+  return <button onClick={onClick} disabled={disabled} style={{...{borderRadius:5,fontWeight:700,cursor:disabled?"not-allowed":"pointer",fontFamily:"'IBM Plex Sans',sans-serif",letterSpacing:.5,transition:"all .15s",opacity:disabled?.3:1,padding:sm?"5px 12px":"9px 20px",fontSize:sm?10:12,textTransform:"uppercase",display:"inline-flex",alignItems:"center",gap:5,width:full?"100%":undefined,justifyContent:full?"center":undefined},...(vs[v]||vs.gold),...sx}}>{ch}</button>;
+};
+
+const Fld = ({label,as,ch,...p}) => <div style={{marginBottom:11}}>
+  {label&&<label style={{display:"block",color:D.text4,fontSize:9,marginBottom:4,letterSpacing:1.5,textTransform:"uppercase",fontWeight:600}}>{label}</label>}
+  {as==="textarea"?<textarea {...p} style={{width:"100%",background:D.bg3,border:`1px solid ${D.border2}`,borderRadius:5,color:D.text,padding:"8px 11px",fontSize:12,resize:"vertical",minHeight:64,outline:"none",boxSizing:"border-box",fontFamily:"'IBM Plex Sans',sans-serif"}}/>
+  :as==="select"?<select {...p} style={{width:"100%",background:D.bg3,border:`1px solid ${D.border2}`,borderRadius:5,color:D.text,padding:"8px 11px",fontSize:12,outline:"none",boxSizing:"border-box",cursor:"pointer",appearance:"none"}}>{ch}</select>
+  :<input {...p} style={{width:"100%",background:D.bg3,border:`1px solid ${D.border2}`,borderRadius:5,color:D.text,padding:"8px 11px",fontSize:12,outline:"none",boxSizing:"border-box"}}/>}
+</div>;
+
+const Modal = ({title,sub,onClose,children,wide}) => <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.88)",zIndex:9000,display:"flex",alignItems:"center",justifyContent:"center",padding:20,overflowY:"auto",backdropFilter:"blur(12px)"}} onClick={e=>{if(e.target===e.currentTarget)onClose();}}>
+  <div style={{background:D.bg2,border:`1px solid ${D.border2}`,borderRadius:12,padding:26,width:"100%",maxWidth:wide?820:480,maxHeight:"92vh",overflowY:"auto",boxShadow:"0 32px 80px rgba(0,0,0,.85)"}}>
+    <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:20}}>
+      <div>
+        <h2 style={{margin:0,fontFamily:"'Bebas Neue',sans-serif",fontSize:22,color:D.text,letterSpacing:2}}>{title}</h2>
+        {sub&&<p style={{margin:"3px 0 0",color:D.text3,fontSize:10}}>{sub}</p>}
+      </div>
+      <button onClick={onClose} style={{background:"none",border:`1px solid ${D.border2}`,color:D.text4,fontSize:13,cursor:"pointer",padding:"3px 8px",borderRadius:4,marginLeft:14}}>✕</button>
+    </div>
+    {children}
+  </div>
+</div>;
+
+const Badges = ({t}) => <div style={{display:"flex",gap:4,flexWrap:"wrap"}}>
+  {t.badge_owned&&<span style={{background:"#2A8A4A18",color:D.green,border:"1px solid #2A8A4A28",fontSize:8,padding:"2px 7px",borderRadius:3,fontWeight:800,letterSpacing:.7}}>✓ MASTER OWNED</span>}
+  {t.badge_cleared&&<span style={{background:"#2A8A4A18",color:D.green,border:"1px solid #2A8A4A28",fontSize:8,padding:"2px 7px",borderRadius:3,fontWeight:800,letterSpacing:.7}}>✓ PUBLISHING CLEARED</span>}
+  {t.badge_no_samples&&<span style={{background:"#2A8A4A18",color:D.green,border:"1px solid #2A8A4A28",fontSize:8,padding:"2px 7px",borderRadius:3,fontWeight:800,letterSpacing:.7}}>✓ NO SAMPLES</span>}
+</div>;
+
+// ─── VINYL CARD ──────────────────────────────────────────────────────────────
+function VCard({track,onSelect,onPlay,playing,prog,supMode}) {
+  const art = track.artwork_url || track.gradient || GRADS[0];
+  const isImg = art.startsWith("http");
+  return <div className="vc" onClick={()=>onSelect(track)} style={{cursor:"pointer",transition:"all .22s",transform:"translateY(0)"}}>
+    <div style={{borderRadius:8,aspectRatio:"1",position:"relative",overflow:"hidden",boxShadow:`0 5px 18px rgba(0,0,0,.55),0 0 0 1px ${D.border}`,background:isImg?"#111":art,transition:"box-shadow .22s"}}>
+      {isImg&&<img src={art} alt={track.title} style={{width:"100%",height:"100%",objectFit:"cover",position:"absolute",inset:0}}/>}
+      <div className="vinyl-peek" style={{position:"absolute",right:6,top:"50%",transform:"translateY(-50%)",width:"80%",height:"80%",borderRadius:"50%",background:"radial-gradient(circle,#111 28%,#1a1a1a 29%,#111 44%,#1a1a1a 45%,#111 58%,#222 59%,#111 72%)",opacity:0,transition:"all .28s"}}>
+        <div style={{position:"absolute",top:"50%",left:"50%",transform:"translate(-50%,-50%)",width:13,height:13,borderRadius:"50%",background:D.gold}}/>
+      </div>
+      <div style={{position:"absolute",inset:0,background:"linear-gradient(to top,rgba(0,0,0,.85) 0%,transparent 55%)"}}/>
+      {playing&&<div style={{position:"absolute",top:10,right:10,display:"flex",gap:2,alignItems:"flex-end",height:12}}>
+        {[5,9,7,11,6].map((h,i)=><div key={i} style={{width:2,borderRadius:1,background:D.gold,height:h,animation:`eq ${.35+i*.1}s ease-in-out infinite alternate`}}/>)}
+      </div>}
+      <div className="vc-controls" style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center",opacity:0,transition:"opacity .18s",flexDirection:"column",gap:8}}>
+        <button onClick={e=>{e.stopPropagation();onPlay(track,false);}} style={{width:42,height:42,borderRadius:"50%",background:`linear-gradient(135deg,${D.gold},${D.goldL})`,border:"none",color:"#0B0B0B",fontSize:16,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",zIndex:2}}>{playing?"▮▮":"▶"}</button>
+      </div>
+      <button className="hook-btn" onClick={e=>{e.stopPropagation();onPlay(track,true);}} style={{position:"absolute",bottom:8,left:8,background:"rgba(0,0,0,.7)",border:"1px solid rgba(255,255,255,.1)",color:"rgba(255,255,255,.6)",fontSize:8,padding:"3px 8px",borderRadius:20,cursor:"pointer",fontWeight:700,letterSpacing:.5,textTransform:"uppercase",zIndex:3,opacity:0,transition:"opacity .18s"}}>▶▶ Hook</button>
+      <div style={{position:"absolute",bottom:10,left:10,right:10}}>
+        <div style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:20,letterSpacing:2,color:"rgba(255,255,255,.95)",lineHeight:1,textShadow:"0 2px 8px rgba(0,0,0,.9)"}}>{track.title}</div>
+        <div style={{fontSize:8,color:"rgba(255,255,255,.38)",letterSpacing:1.5,marginTop:2,textTransform:"uppercase"}}>{track.genre} · {track.bpm} BPM</div>
+      </div>
+      {playing&&<div style={{position:"absolute",bottom:0,left:0,right:0,height:2,background:"rgba(255,255,255,.1)"}}><div style={{width:`${(prog||0)*100}%`,height:"100%",background:D.gold,transition:"width .1s"}}/></div>}
+    </div>
+    <div style={{padding:"8px 2px 0"}}>
+      <div style={{display:"flex",gap:4,flexWrap:"wrap",marginBottom:4}}>
+        <Tag label={track.mood||track.genre}/>
+        {track.use_cases?.[0]&&<Tag label={track.use_cases[0]} c={D.text3} sm/>}
+      </div>
+      {supMode&&<Badges t={track}/>}
+      {track.use_case_1&&<div style={{fontSize:10,color:D.text4,marginTop:3,lineHeight:1.4}}>{track.use_case_1}</div>}
+    </div>
+  </div>;
+}
+
+// ─── UPLOAD ZONE ─────────────────────────────────────────────────────────────
+function UZone({label,req,file,onChange}) {
+  return <label style={{display:"block",background:D.bg3,border:`1px dashed ${file?D.gold:D.border2}`,borderRadius:7,padding:"12px 14px",cursor:"pointer",transition:"all .15s"}}>
+    <div style={{fontSize:9,color:D.text4,letterSpacing:1,textTransform:"uppercase",fontWeight:700,marginBottom:3}}>{label}{req&&<span style={{color:D.gold}}> *</span>}</div>
+    {file?<div style={{fontSize:11,color:D.green,fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>✓ {file.name}</div>:<div style={{fontSize:10,color:D.text4}}>Tap to select file</div>}
+    <input type="file" accept="audio/*" style={{display:"none"}} onChange={e=>{if(e.target.files[0])onChange(e.target.files[0]);}}/>
+  </label>;
+}
+
+// ─── APP ─────────────────────────────────────────────────────────────────────
+function App() {
+  const [tracks,setTracks]=useState([]);
+  const [loading,setLoading]=useState(true);
+  const [supMode,setSupMode]=useState(false);
+  const [threePicks,setThreePicks]=useState(false);
+  const [searchQ,setSearchQ]=useState("");
+  const [searchRes,setSearchRes]=useState([]);
+  const [searching,setSearching]=useState(false);
+  const [playing,setPlaying]=useState(null);
+  const [prog,setProg]=useState({});
+  const [selected,setSelected]=useState(null);
+  const [licModal,setLicModal]=useState(null);
+  const [licTier,setLicTier]=useState("sync");
+  const [buyerF,setBuyerF]=useState({name:"",company:"",artist:"",project:"",email:""});
+  const [conModal,setConModal]=useState(null);
+  const [conF,setConF]=useState({name:"",company:"",role:"",project:"",medium:"",scene:"",notes:"",email:""});
+  const [conDone,setConDone]=useState(false);
+  const [ctModal,setCtModal]=useState(null);
+  const [page,setPage]=useState("home");
+  const [authed,setAuthed]=useState(false);
+  const [pw,setPw]=useState("");
+  const [pwErr,setPwErr]=useState(false);
+  const [inbox,setInbox]=useState([]);
+  const [showUp,setShowUp]=useState(false);
+  const [uploading,setUploading]=useState(false);
+  const [upProg,setUpProg]=useState("");
+  const [upErr,setUpErr]=useState("");
+  const [uF,setUF]=useState({title:"",genre:"",mood:"",bpm:"",key:"",dur:"",desc:"",uc1:"",ucs:"",tags:"",section:"featured",psync:"",pbundle:"",pexcl:"",hook:.3,grad:GRADS[0]});
+  const [fMain,setFMain]=useState(null);
+  const [fInst,setFInst]=useState(null);
+  const [fClean,setFClean]=useState(null);
+  const [fL30,setFL30]=useState(null);
+  const [fL60,setFL60]=useState(null);
+  const [fArt,setFArt]=useState(null);
+  const [artPrev,setArtPrev]=useState(null);
+  const audioRefs=useRef({});
+
+  useEffect(()=>{loadTracks();loadInbox();},[]);
+
+  const loadTracks=async()=>{
+    setLoading(true);
+    const {data}=await sb.from("tracks").select("*").order("created_at",{ascending:false});
+    if(data)setTracks(data);
+    setLoading(false);
+  };
+  const loadInbox=async()=>{
+    const {data}=await sb.from("inquiries").select("*").order("created_at",{ascending:false});
+    if(data)setInbox(data);
+  };
+
+  const togglePlay=(track,hook=false)=>{
+    const id=track.id,audio=audioRefs.current[id];
+    if(playing===id&&!hook){audio?.pause();setPlaying(null);return;}
+    Object.values(audioRefs.current).forEach(a=>a?.pause());
+    setPlaying(id);
+    if(audio){if(hook&&track.hook_start&&audio.duration)audio.currentTime=audio.duration*track.hook_start;audio.play().catch(()=>{});}
+  };
+
+  const doSearchQ=q=>{setSearchQ(q);if(q.trim().length>1){setSearchRes(search(q,tracks));setSearching(true);}else{setSearching(false);setSearchRes([]);}};
+
+  const uploadFile=async(file,bucket,folder)=>{
+    if(!file)return null;
+    const ext=file.name.split(".").pop(),path=`${folder}/${Date.now()}_${uid()}.${ext}`;
+    const{error}=await sb.storage.from(bucket).upload(path,file,{upsert:true});
+    if(error)throw new Error(error.message);
+    return sb.storage.from(bucket).getPublicUrl(path).data.publicUrl;
+  };
+
+  const handleUpload=async()=>{
+    if(!uF.title){setUpErr("Title required.");return;}
+    if(!uF.genre){setUpErr("Genre required.");return;}
+    if(!uF.mood){setUpErr("Mood required.");return;}
+    if(!uF.bpm){setUpErr("BPM required.");return;}
+    if(!fMain){setUpErr("Master audio file required.");return;}
+    setUpErr("");setUploading(true);
+    try{
+      const tid=`track_${Date.now()}`;
+      setUpProg("Uploading master audio...");const masterUrl=await uploadFile(fMain,"audio",tid);
+      setUpProg("Uploading instrumental...");const instUrl=await uploadFile(fInst,"audio",tid);
+      setUpProg("Uploading clean version...");const cleanUrl=await uploadFile(fClean,"audio",tid);
+      setUpProg("Uploading 30s loop...");const l30Url=await uploadFile(fL30,"audio",tid);
+      setUpProg("Uploading 60s cut...");const l60Url=await uploadFile(fL60,"audio",tid);
+      setUpProg("Uploading artwork...");const artUrl=await uploadFile(fArt,"artwork",tid);
+      setUpProg("Saving to database...");
+      const{error}=await sb.from("tracks").insert({
+        title:uF.title.toUpperCase().trim(),genre:uF.genre,mood:uF.mood.trim(),
+        bpm:parseInt(uF.bpm)||120,key:uF.key.trim(),duration:uF.dur.trim(),hook_start:uF.hook,
+        price_sync:parseInt(uF.psync)||300,price_bundle:parseInt(uF.pbundle)||450,price_exclusive:parseInt(uF.pexcl)||2000,
+        description:uF.desc.trim(),use_case_1:uF.uc1.trim(),
+        use_cases:uF.ucs.split(",").map(s=>s.trim()).filter(Boolean),
+        tags:uF.tags.split(",").map(s=>s.trim().toLowerCase()).filter(Boolean),
+        section:uF.section,gradient:artUrl?null:uF.grad,artwork_url:artUrl,
+        badge_owned:true,badge_cleared:true,badge_no_samples:true,
+        pack_instrumental:!!fInst,pack_clean:!!fClean,pack_loop30:!!fL30,pack_loop60:!!fL60,
+        audio_master_url:masterUrl,audio_inst_url:instUrl,audio_clean_url:cleanUrl,
+        audio_loop30_url:l30Url,audio_loop60_url:l60Url,
+      });
+      if(error)throw new Error(error.message);
+      setUpProg("Done!");await loadTracks();
+      setUF({title:"",genre:"",mood:"",bpm:"",key:"",dur:"",desc:"",uc1:"",ucs:"",tags:"",section:"featured",psync:"",pbundle:"",pexcl:"",hook:.3,grad:GRADS[0]});
+      setFMain(null);setFInst(null);setFClean(null);setFL30(null);setFL60(null);setFArt(null);setArtPrev(null);
+      setShowUp(false);setUpProg("");
+    }catch(e){setUpErr(e.message);setUpProg("");}
+    setUploading(false);
+  };
+
+  const submitCon=async()=>{
+    await sb.from("inquiries").insert({track_title:conModal.title,...conF,status:"pending"});
+    const s=`[CURATED] Sync Request — "${conModal.title}"`,b=`Track: ${conModal.title}\nFrom: ${conF.name} (${conF.role})\nCompany: ${conF.company}\nProject: ${conF.project}\nEmail: ${conF.email}\nNotes: ${conF.notes}`;
+    window.open(`mailto:hello@wedesignsstudio.com?subject=${encodeURIComponent(s)}&body=${encodeURIComponent(b)}`);
+    setConDone(true);await loadInbox();
+  };
+
+  const updateStatus=async(id,status)=>{await sb.from("inquiries").update({status}).eq("id",id);setInbox(i=>i.map(r=>r.id===id?{...r,status}:r));};
+  const deleteTrack=async(id)=>{await sb.from("tracks").delete().eq("id",id);setTracks(ts=>ts.filter(t=>t.id!==id));};
+
+  const pending=inbox.filter(r=>r.status==="pending").length;
+  const featured=tracks.filter(t=>t.section==="featured");
+  const emotional=tracks.filter(t=>t.section==="emotional");
+  const latest=tracks.filter(t=>t.section==="latest");
+  const show=list=>(threePicks?(supMode?list.filter(t=>t.badge_owned):list):supMode?list.filter(t=>t.badge_owned):list).slice(0,threePicks?3:9999);
+  const scol={pending:D.gold,reviewing:"#6B3FA0",approved:D.green,declined:D.red};
+
+  const Section=({title,sub,list})=>{const s=show(list);if(!s.length)return null;return<section style={{marginBottom:48}}>
+    <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-end",marginBottom:18}}>
+      <div><h2 style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:26,letterSpacing:3,color:D.text,margin:0}}>{title}</h2>{sub&&<p style={{fontSize:11,color:D.text3,margin:"3px 0 0"}}>{sub}</p>}</div>
+      <span style={{fontSize:9,color:D.text4,letterSpacing:1,fontWeight:700}}>{s.length} TRACKS</span>
+    </div>
+    <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(180px,1fr))",gap:16}}>
+      {s.map((t,i)=><div key={t.id} style={{animation:`up .28s ${i*.06}s both`}}>
+        {t.audio_master_url&&<audio ref={el=>audioRefs.current[t.id]=el} src={t.audio_master_url} onTimeUpdate={e=>setProg(p=>({...p,[t.id]:e.target.currentTime/e.target.duration}))} onEnded={()=>setPlaying(null)}/>}
+        <VCard track={t} onSelect={setSelected} onPlay={togglePlay} playing={playing===t.id} prog={prog[t.id]||0} supMode={supMode}/>
+      </div>)}
+    </div>
+  </section>;};
+
+  return <>
+    {/* NAV */}
+    <nav style={{position:"sticky",top:0,zIndex:4000,background:"rgba(11,11,11,.94)",backdropFilter:"blur(20px)",borderBottom:`1px solid ${D.border}`,padding:"0 24px",height:56,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+      <div style={{display:"flex",alignItems:"center",gap:8}}>
+        <div style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:20,letterSpacing:6,color:D.text}}>CURATED</div>
+        <div style={{width:4,height:4,borderRadius:"50%",background:D.gold,animation:"pulse 2s infinite"}}/>
+      </div>
+      <div style={{display:"flex",alignItems:"center",gap:8}}>
+        <button onClick={()=>setSupMode(v=>!v)} style={{display:"flex",alignItems:"center",gap:6,padding:"5px 13px",borderRadius:20,border:`1px solid ${supMode?D.gold:D.border3}`,background:supMode?D.gold+"18":"transparent",cursor:"pointer",fontFamily:"'IBM Plex Sans',sans-serif"}}>
+          <div style={{width:7,height:7,borderRadius:"50%",background:supMode?D.gold:D.text4,transition:"all .2s"}}/>
+          <span style={{fontSize:9,fontWeight:700,letterSpacing:1,color:supMode?D.gold:D.text4,textTransform:"uppercase"}}>Supervisor Mode</span>
+        </button>
+        <button onClick={()=>setThreePicks(v=>!v)} style={{padding:"5px 11px",borderRadius:20,border:`1px solid ${threePicks?"#3A6A9A":D.border3}`,background:threePicks?"#3A6A9A18":"transparent",cursor:"pointer",fontFamily:"'IBM Plex Sans',sans-serif",fontSize:9,fontWeight:700,letterSpacing:1,color:threePicks?"#3A6A9A":D.text4,textTransform:"uppercase"}}>3 Picks</button>
+        {page==="admin"
+          ?<Btn ch="← Home" v="ghost" sm onClick={()=>setPage("home")}/>
+          :<button onClick={()=>setPage("admin")} style={{background:"none",border:`1px solid ${D.border2}`,color:D.text4,fontSize:9,fontWeight:700,letterSpacing:1,padding:"4px 10px",borderRadius:4,cursor:"pointer",textTransform:"uppercase",position:"relative"}}>
+            Admin{pending>0&&<span style={{position:"absolute",top:-3,right:-3,width:7,height:7,borderRadius:"50%",background:D.red}}/>}
+          </button>}
+      </div>
+    </nav>
+
+    {supMode&&<div style={{background:`linear-gradient(to right,${D.gold}18,${D.gold}08)`,borderBottom:`1px solid ${D.gold}30`,padding:"8px 24px",display:"flex",alignItems:"center",gap:10}}>
+      <div style={{width:6,height:6,borderRadius:"50%",background:D.gold,animation:"pulse 1.5s infinite"}}/>
+      <span style={{fontSize:10,fontWeight:700,color:D.gold,letterSpacing:.5}}>SUPERVISOR MODE</span>
+      <span style={{fontSize:9,color:D.text3}}>Pre-cleared · Download-ready · All rights verified</span>
+      <span style={{fontSize:8,color:D.green,fontWeight:700,marginLeft:"auto"}}>✓ MASTER OWNED · ✓ PUBLISHING CLEARED · ✓ NO SAMPLES</span>
+    </div>}
+
+    {/* HOME */}
+    {page==="home"&&<>
+      <section style={{padding:"48px 24px 40px",borderBottom:`1px solid ${D.border}`,maxWidth:1200,margin:"0 auto"}}>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:40,alignItems:"center"}}>
+          <div style={{animation:"up .4s both"}}>
+            <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:12}}>
+              <div style={{width:18,height:1,background:D.gold}}/>
+              <span style={{fontSize:9,color:D.gold,letterSpacing:3,textTransform:"uppercase",fontWeight:700}}>Premium Music Licensing</span>
+            </div>
+            <h1 style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:64,letterSpacing:2,color:D.text,lineHeight:.92,marginBottom:14}}>A Search Engine<br/><span style={{color:D.gold}}>for Feelings.</span></h1>
+            <p style={{fontSize:13,color:D.text2,lineHeight:1.85,maxWidth:380,marginBottom:20}}>Find, preview, and license music in under 30 seconds. Every track is pre-cleared and ships with a full download pack.</p>
+            <div style={{position:"relative",maxWidth:460,marginBottom:12}}>
+              <span style={{position:"absolute",left:12,top:"50%",transform:"translateY(-50%)",color:D.text4,fontSize:14,pointerEvents:"none"}}>⌕</span>
+              <input className="srch" value={searchQ} onChange={e=>doSearchQ(e.target.value)} placeholder='Try "pregame hype", "sad film", "villain scene"...' style={{width:"100%",background:D.bg3,border:`1px solid ${D.border2}`,borderRadius:6,padding:"11px 36px 11px 36px",fontSize:12,color:D.text,transition:"all .15s"}}/>
+              {searchQ&&<button onClick={()=>{setSearchQ("");setSearching(false);}} style={{position:"absolute",right:11,top:"50%",transform:"translateY(-50%)",background:"none",border:"none",color:D.text4,cursor:"pointer",fontSize:14}}>✕</button>}
+            </div>
+            <div style={{display:"flex",gap:5,flexWrap:"wrap"}}>
+              {USE_CASES.slice(0,8).map(u=><button key={u} className="pill" onClick={()=>doSearchQ(u.toLowerCase())} style={{padding:"4px 10px",borderRadius:20,border:`1px solid ${D.border2}`,background:"transparent",color:D.text4,fontSize:9,fontWeight:700,cursor:"pointer",letterSpacing:.5,textTransform:"uppercase",transition:"all .15s"}}>{u}</button>)}
+            </div>
+          </div>
+          <div style={{position:"relative",height:340,animation:"up .5s .1s both"}}>
+            {tracks.slice(0,4).map((t,i)=>{
+              const pos=[{top:0,left:0,rot:-7,z:1},{top:22,left:85,rot:4,z:2},{top:52,left:168,rot:-5,z:3},{top:7,left:245,rot:6,z:4}][i];
+              if(!pos)return null;
+              const art=t.artwork_url||t.gradient||GRADS[i%GRADS.length],isImg=art.startsWith("http");
+              return<div key={t.id} onClick={()=>setSelected(t)} style={{position:"absolute",top:pos.top,left:pos.left,width:175,height:175,cursor:"pointer",zIndex:pos.z,transform:`rotate(${pos.rot}deg)`,transition:"all .28s",borderRadius:9,overflow:"hidden",boxShadow:`0 10px 36px rgba(0,0,0,.65),0 0 0 1px ${D.border}`,background:isImg?"#111":art}}
+                onMouseEnter={e=>{e.currentTarget.style.transform=`rotate(${pos.rot}deg) scale(1.07) translateY(-7px)`;e.currentTarget.style.zIndex="10";}}
+                onMouseLeave={e=>{e.currentTarget.style.transform=`rotate(${pos.rot}deg)`;e.currentTarget.style.zIndex=pos.z;}}>
+                {isImg&&<img src={art} alt="" style={{width:"100%",height:"100%",objectFit:"cover",position:"absolute",inset:0}}/>}
+                <div style={{position:"absolute",inset:0,background:"linear-gradient(to top,rgba(0,0,0,.75) 0%,transparent 50%)"}}/>
+                <div style={{position:"absolute",bottom:9,left:10}}>
+                  <div style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:15,letterSpacing:2,color:"rgba(255,255,255,.92)"}}>{t.title}</div>
+                  <div style={{fontSize:7,color:"rgba(255,255,255,.35)",letterSpacing:2,textTransform:"uppercase"}}>{t.genre}</div>
+                </div>
+              </div>;
+            })}
+            <div style={{position:"absolute",bottom:14,right:0,background:`linear-gradient(135deg,${D.bg3},${D.bg4})`,border:`1px solid ${D.border2}`,borderRadius:9,padding:"12px 15px",zIndex:20,boxShadow:`0 12px 36px rgba(0,0,0,.65)`}}>
+              <div style={{fontSize:7,color:D.gold,letterSpacing:3,textTransform:"uppercase",fontWeight:700,marginBottom:3}}>Ready to License</div>
+              <div style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:15,letterSpacing:2,color:D.text}}>Curated Sounds</div>
+              <div style={{fontSize:9,color:D.text3,marginTop:2}}>{tracks.length} tracks · Pre-cleared</div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <div style={{maxWidth:1200,margin:"0 auto",padding:"0 24px"}}>
+        {searching&&<section style={{padding:"32px 0",borderBottom:`1px solid ${D.border}`}}>
+          <h2 style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:24,letterSpacing:3,color:D.text,marginBottom:3}}>{searchRes.length?`"${searchQ}"`:`No results for "${searchQ}"`}</h2>
+          <p style={{fontSize:10,color:D.text3,marginBottom:16}}>{searchRes.length} track{searchRes.length!==1?"s":""} matched</p>
+          {searchRes.length>0&&<div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(180px,1fr))",gap:16}}>
+            {(threePicks?searchRes.slice(0,3):searchRes).map((t,i)=><div key={t.id} style={{animation:`up .24s ${i*.05}s both`}}>
+              {t.audio_master_url&&<audio ref={el=>audioRefs.current[t.id]=el} src={t.audio_master_url} onTimeUpdate={e=>setProg(p=>({...p,[t.id]:e.target.currentTime/e.target.duration}))} onEnded={()=>setPlaying(null)}/>}
+              <VCard track={t} onSelect={setSelected} onPlay={togglePlay} playing={playing===t.id} prog={prog[t.id]||0} supMode={supMode}/>
+            </div>)}
+          </div>}
+        </section>}
+
+        {loading?<div style={{textAlign:"center",padding:"80px 0"}}>
+          <div style={{width:32,height:32,border:`3px solid ${D.border2}`,borderTop:`3px solid ${D.gold}`,borderRadius:"50%",animation:"spin .8s linear infinite",margin:"0 auto 16px"}}/>
+          <div style={{color:D.text3,fontSize:12}}>Loading catalog...</div>
+        </div>:<>
+          <div style={{paddingTop:40}}>
+            {featured.length>0
+              ?<Section title="Featured Sounds" sub="Hand-picked for film, TV, and broadcast" list={featured}/>
+              :<div style={{textAlign:"center",padding:"60px 0",color:D.text4,border:`1px dashed ${D.border}`,borderRadius:8,margin:"40px 0"}}>
+                <div style={{fontSize:28,marginBottom:10,opacity:.2}}>♫</div>
+                <div style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:18,letterSpacing:2,color:D.text3,marginBottom:6}}>No tracks yet</div>
+                <div style={{fontSize:12,marginBottom:18}}>Upload your first track in Admin</div>
+                <Btn ch="Go to Admin →" v="gold" onClick={()=>setPage("admin")}/>
+              </div>}
+            <Section title="Emotional Catalog" sub="R&B, Soul, Ambient — for the moments that hit" list={emotional}/>
+            <Section title="Latest Drops" sub="Freshly composed and ready to license" list={latest}/>
+          </div>
+          <div style={{height:80}}/>
+        </>}
+      </div>
+    </>}
+
+    {/* ADMIN */}
+    {page==="admin"&&<div style={{maxWidth:1100,margin:"0 auto",padding:"32px 24px 80px",animation:"fadeIn .25s both"}}>
+      {!authed?<div style={{maxWidth:300,margin:"52px auto",textAlign:"center"}}>
+        <div style={{width:48,height:48,borderRadius:"50%",background:D.bg3,border:`1px solid ${D.border2}`,display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 14px",fontSize:20,color:D.text3}}>⚙</div>
+        <h2 style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:24,letterSpacing:3,color:D.text,marginBottom:5}}>Admin Access</h2>
+        <p style={{color:D.text3,fontSize:11,marginBottom:16}}>Private dashboard</p>
+        <Fld label="Password" type="password" value={pw} onChange={e=>{setPw(e.target.value);setPwErr(false);}} onKeyDown={e=>{if(e.key==="Enter"){if(pw===ADMIN_PASS)setAuthed(true);else setPwErr(true);}}} placeholder="Admin password" autoFocus/>
+        {pwErr&&<p style={{color:D.red,fontSize:10,marginBottom:8,marginTop:-6}}>Incorrect password.</p>}
+        <Btn full ch="Sign In" v="gold" onClick={()=>{if(pw===ADMIN_PASS){setAuthed(true);setPwErr(false);}else setPwErr(true);}}/>
+      </div>:<>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-end",marginBottom:22,paddingBottom:16,borderBottom:`1px solid ${D.border}`}}>
+          <div>
+            <p style={{fontSize:8,color:D.text4,letterSpacing:3,textTransform:"uppercase",marginBottom:4}}>Private Dashboard</p>
+            <h1 style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:36,letterSpacing:4,color:D.text}}>CURATED ADMIN</h1>
+          </div>
+          <Btn sm ch="Sign Out" v="ghost" onClick={()=>{setAuthed(false);setPw("");}}/>
+        </div>
+
+        <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:1,background:D.border,borderRadius:7,overflow:"hidden",marginBottom:24}}>
+          {[{l:"Tracks",v:tracks.length},{l:"Open Requests",v:pending},{l:"Total Inquiries",v:inbox.length},{l:"Genres",v:[...new Set(tracks.map(t=>t.genre))].length}].map(s=>
+            <div key={s.l} style={{background:D.bg2,padding:"13px 16px"}}>
+              <div style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:32,color:s.l==="Open Requests"&&s.v>0?D.red:D.gold,lineHeight:1}}>{s.v}</div>
+              <div style={{fontSize:8,color:D.text4,letterSpacing:1.5,textTransform:"uppercase",marginTop:3,fontWeight:600}}>{s.l}</div>
+            </div>
+          )}
+        </div>
+
+        {/* UPLOAD */}
+        <div style={{marginBottom:28}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
+            <h3 style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:18,letterSpacing:2,color:D.text}}>Upload New Track</h3>
+            <Btn sm ch={showUp?"− Hide":"+ Upload Track"} v="gold" onClick={()=>setShowUp(v=>!v)}/>
+          </div>
+          {showUp&&<div style={{background:D.bg2,border:`1px solid ${D.border2}`,borderRadius:10,padding:20}}>
+
+            {/* Artwork */}
+            <div style={{marginBottom:16}}>
+              <div style={{fontSize:9,color:D.gold,letterSpacing:1.5,textTransform:"uppercase",fontWeight:700,marginBottom:8}}>Artwork</div>
+              <div style={{display:"grid",gridTemplateColumns:"auto 1fr",gap:14,alignItems:"start"}}>
+                <label style={{width:110,height:110,borderRadius:8,border:`2px dashed ${fArt?D.gold:D.border2}`,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",overflow:"hidden",flexShrink:0,background:artPrev?"#111":uF.grad}}>
+                  {artPrev?<img src={artPrev} alt="" style={{width:"100%",height:"100%",objectFit:"cover"}}/>:<div style={{textAlign:"center",padding:8}}><div style={{fontSize:20,marginBottom:3,opacity:.4}}>🖼</div><div style={{fontSize:8,color:D.text4,textTransform:"uppercase",letterSpacing:.5}}>Upload Art</div></div>}
+                  <input type="file" accept="image/*" style={{display:"none"}} onChange={e=>{const f=e.target.files[0];if(f){setFArt(f);setArtPrev(URL.createObjectURL(f));}}}/>
+                </label>
+                <div>
+                  <div style={{fontSize:9,color:D.text4,marginBottom:6}}>Or pick a gradient:</div>
+                  <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+                    {GRADS.map((g,i)=><button key={i} onClick={()=>{setUF(f=>({...f,grad:g}));setFArt(null);setArtPrev(null);}} style={{width:32,height:32,borderRadius:5,background:g,border:`2px solid ${uF.grad===g&&!fArt?D.gold:"transparent"}`,cursor:"pointer"}}/>)}
+                  </div>
+                  {fArt&&<div style={{fontSize:9,color:D.green,marginTop:5}}>✓ Using uploaded image</div>}
+                </div>
+              </div>
+            </div>
+
+            {/* Audio files */}
+            <div style={{marginBottom:16}}>
+              <div style={{fontSize:9,color:D.gold,letterSpacing:1.5,textTransform:"uppercase",fontWeight:700,marginBottom:8}}>Audio Files</div>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:7}}>
+                <UZone label="Master WAV / MP3" req file={fMain} onChange={setFMain}/>
+                <UZone label="Instrumental" file={fInst} onChange={setFInst}/>
+                <UZone label="Clean Version" file={fClean} onChange={setFClean}/>
+                <UZone label="30-Second Loop" file={fL30} onChange={setFL30}/>
+                <UZone label="60-Second Cut" file={fL60} onChange={setFL60}/>
+              </div>
+            </div>
+
+            <div style={{height:1,background:D.border,marginBottom:14}}/>
+            <div style={{fontSize:9,color:D.gold,letterSpacing:1.5,textTransform:"uppercase",fontWeight:700,marginBottom:8}}>Track Info</div>
+
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:9,marginBottom:9}}>
+              <Fld label="Title *" value={uF.title} onChange={e=>setUF(f=>({...f,title:e.target.value}))} placeholder="e.g. FRACTURE"/>
+              <Fld label="Genre *" as="select" value={uF.genre} onChange={e=>setUF(f=>({...f,genre:e.target.value}))}><option value="">Select...</option>{GENRES.map(g=><option key={g}>{g}</option>)}</Fld>
+            </div>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:9,marginBottom:9}}>
+              <Fld label="Mood *" value={uF.mood} onChange={e=>setUF(f=>({...f,mood:e.target.value}))} placeholder="Tense"/>
+              <Fld label="BPM *" type="number" value={uF.bpm} onChange={e=>setUF(f=>({...f,bpm:e.target.value}))} placeholder="138"/>
+              <Fld label="Key" value={uF.key} onChange={e=>setUF(f=>({...f,key:e.target.value}))} placeholder="Dm"/>
+            </div>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:9,marginBottom:9}}>
+              <Fld label="Sync Price ($)" type="number" value={uF.psync} onChange={e=>setUF(f=>({...f,psync:e.target.value}))} placeholder="350"/>
+              <Fld label="Bundle Price ($)" type="number" value={uF.pbundle} onChange={e=>setUF(f=>({...f,pbundle:e.target.value}))} placeholder="500"/>
+              <Fld label="Exclusive ($)" type="number" value={uF.pexcl} onChange={e=>setUF(f=>({...f,pexcl:e.target.value}))} placeholder="2500"/>
+            </div>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:9,marginBottom:9}}>
+              <Fld label="Duration" value={uF.dur} onChange={e=>setUF(f=>({...f,dur:e.target.value}))} placeholder="2:34"/>
+              <Fld label="Section" as="select" value={uF.section} onChange={e=>setUF(f=>({...f,section:e.target.value}))}><option value="featured">Featured</option><option value="emotional">Emotional</option><option value="latest">Latest Drops</option></Fld>
+            </div>
+            <Fld label="One-Line Use Case" value={uF.uc1} onChange={e=>setUF(f=>({...f,uc1:e.target.value}))} placeholder="Pregame hype, villain scene, highlight reel"/>
+            <Fld label="Description" as="textarea" value={uF.desc} onChange={e=>setUF(f=>({...f,desc:e.target.value}))} placeholder="Mood, energy, best placement..."/>
+            <Fld label="Use Cases (comma separated)" value={uF.ucs} onChange={e=>setUF(f=>({...f,ucs:e.target.value}))} placeholder="Pregame Hype, Highlight Reel, Villain Reveal"/>
+            <Fld label="Search Tags (comma separated)" value={uF.tags} onChange={e=>setUF(f=>({...f,tags:e.target.value}))} placeholder="dark trap, hype, aggressive, cinematic"/>
+
+            <div style={{marginBottom:12}}>
+              <label style={{display:"block",color:D.text4,fontSize:9,marginBottom:4,letterSpacing:1.5,textTransform:"uppercase",fontWeight:600}}>Hook Jump Point — {Math.round(uF.hook*100)}% into track</label>
+              <input type="range" min="0" max=".9" step=".05" value={uF.hook} onChange={e=>setUF(f=>({...f,hook:parseFloat(e.target.value)}))} style={{width:"100%",accentColor:D.gold,cursor:"pointer"}}/>
+              <div style={{display:"flex",justifyContent:"space-between",fontSize:9,color:D.text4,marginTop:2}}><span>Intro</span><span>End</span></div>
+            </div>
+
+            {upErr&&<p style={{color:D.red,fontSize:11,marginBottom:7}}>⚠ {upErr}</p>}
+            {upProg&&<p style={{color:D.gold,fontSize:11,marginBottom:7,display:"flex",alignItems:"center",gap:6}}><span style={{display:"inline-block",width:11,height:11,border:`2px solid ${D.gold}40`,borderTop:`2px solid ${D.gold}`,borderRadius:"50%",animation:"spin .8s linear infinite"}}/>{upProg}</p>}
+            <Btn full ch={uploading?"Uploading...":"Add Track to Catalog →"} v="gold" disabled={uploading} sx={{padding:10,fontSize:12}} onClick={handleUpload}/>
+          </div>}
+        </div>
+
+        {/* Inbox */}
+        <div style={{marginBottom:28}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+            <h3 style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:18,letterSpacing:2,color:D.text}}>Sync Request Inbox</h3>
+            {pending>0&&<Tag label={`${pending} Pending`}/>}
+          </div>
+          <div style={{display:"flex",flexDirection:"column",gap:5}}>
+            {inbox.map(req=><div key={req.id} style={{background:D.bg2,border:"1px solid",borderRadius:7,padding:"11px 15px",borderColor:req.status==="pending"?D.gold+"44":D.border}}>
+              <div style={{display:"grid",gridTemplateColumns:"1fr auto",gap:12,alignItems:"flex-start"}}>
+                <div>
+                  <div style={{display:"flex",gap:7,alignItems:"center",marginBottom:4,flexWrap:"wrap"}}>
+                    <span style={{fontWeight:700,fontSize:13,color:D.text}}>{req.name}</span>
+                    <span style={{color:D.border3}}>·</span>
+                    <span style={{color:D.text2,fontSize:11}}>{req.company}</span>
+                    <Tag label={(req.status||"pending").toUpperCase()} c={scol[req.status||"pending"]}/>
+                  </div>
+                  <div style={{display:"flex",gap:5,flexWrap:"wrap",marginBottom:3}}>
+                    <Tag label={`↳ ${req.track_title||req.track||""}`}/>
+                    {req.medium&&<Tag label={req.medium} c={D.text3}/>}
+                  </div>
+                  <p style={{color:D.text3,fontSize:10}}><b style={{color:D.text2}}>Project:</b> {req.project}</p>
+                  {req.notes&&<p style={{color:D.text4,fontSize:10,fontStyle:"italic"}}>"{req.notes}"</p>}
+                </div>
+                <div style={{display:"flex",flexDirection:"column",gap:4,minWidth:86}}>
+                  <Btn sm ch="✉ Reply" v="gold" onClick={()=>window.open(`mailto:${req.email}?subject=${encodeURIComponent(`Re: "${req.track_title||req.track}" | CURATED`)}`)}/>
+                  {["reviewing","approved","declined"].map(s=><Btn key={s} sm ch={s[0].toUpperCase()+s.slice(1)} v={s==="approved"?"green":s==="declined"?"red":"ghost"} sx={{justifyContent:"center"}} onClick={()=>updateStatus(req.id,s)}/>)}
+                </div>
+              </div>
+            </div>)}
+            {inbox.length===0&&<div style={{textAlign:"center",padding:"22px",color:D.text4,border:`1px dashed ${D.border}`,borderRadius:7,fontSize:11}}>No requests yet.</div>}
+          </div>
+        </div>
+
+        {/* Catalog */}
+        <div>
+          <h3 style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:18,letterSpacing:2,color:D.text,marginBottom:10}}>Track Catalog ({tracks.length})</h3>
+          <div style={{display:"flex",flexDirection:"column",gap:5}}>
+            {tracks.map(t=>{const art=t.artwork_url||t.gradient||GRADS[0],isImg=art.startsWith("http");return<div key={t.id} style={{background:D.bg2,border:`1px solid ${D.border}`,borderRadius:7,padding:"10px 13px",display:"flex",justifyContent:"space-between",alignItems:"center",gap:12}}>
+              <div style={{display:"flex",gap:10,alignItems:"center",flex:1,minWidth:0}}>
+                <div style={{width:36,height:36,borderRadius:5,background:isImg?"#111":art,flexShrink:0,overflow:"hidden",position:"relative"}}>
+                  {isImg&&<img src={art} alt="" style={{width:"100%",height:"100%",objectFit:"cover"}}/>}
+                  {t.audio_master_url&&<div style={{position:"absolute",bottom:2,right:2,width:5,height:5,borderRadius:"50%",background:D.green}}/>}
+                </div>
+                <div style={{minWidth:0}}>
+                  <div style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:13,letterSpacing:1.5,color:D.text}}>{t.title}</div>
+                  <div style={{display:"flex",gap:3,marginTop:2,flexWrap:"wrap"}}><Tag label={t.genre} sm/><Tag label={t.mood} c={D.text3} sm/><Tag label={`${t.bpm} BPM`} c={D.text4} sm/></div>
+                </div>
+              </div>
+              <div style={{display:"flex",gap:7,alignItems:"center",flexShrink:0}}>
+                <span style={{fontFamily:"'IBM Plex Mono',monospace",fontSize:11,color:D.gold,fontWeight:700}}>${t.price_sync}</span>
+                <Btn sm ch="Remove" v="red" onClick={()=>deleteTrack(t.id)}/>
+              </div>
+            </div>;})}
+            {tracks.length===0&&<div style={{textAlign:"center",padding:"24px",color:D.text4,border:`1px dashed ${D.border}`,borderRadius:7,fontSize:11}}>No tracks yet.</div>}
+          </div>
+        </div>
+      </>}
+    </div>}
+
+    {/* Mini player */}
+    {playing&&(()=>{const t=tracks.find(x=>x.id===playing);if(!t)return null;const art=t.artwork_url||t.gradient||GRADS[0],isImg=art.startsWith("http");return<div style={{position:"fixed",bottom:0,left:0,right:0,zIndex:5000,background:"linear-gradient(to right,#0D0D0D,#111)",borderTop:`1px solid ${D.border2}`,padding:"9px 22px",display:"flex",alignItems:"center",gap:14,boxShadow:"0 -6px 28px rgba(0,0,0,.7)"}}>
+      <div onClick={()=>setSelected(t)} style={{width:38,height:38,borderRadius:6,background:isImg?"#111":art,flexShrink:0,cursor:"pointer",overflow:"hidden",position:"relative"}}>{isImg&&<img src={art} alt="" style={{width:"100%",height:"100%",objectFit:"cover"}}/>}</div>
+      <div style={{minWidth:130,flexShrink:0,cursor:"pointer"}} onClick={()=>setSelected(t)}>
+        <div style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:14,letterSpacing:1.5,color:D.text,lineHeight:1}}>{t.title}</div>
+        <div style={{fontSize:9,color:D.text3,marginTop:1}}>{t.genre} · {t.bpm} BPM</div>
+      </div>
+      <button onClick={()=>{audioRefs.current[playing]?.pause();setPlaying(null);}} style={{width:32,height:32,borderRadius:"50%",background:`linear-gradient(135deg,${D.gold},${D.goldL})`,border:"none",color:"#0B0B0B",fontSize:12,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",flexShrink:0}}>▮▮</button>
+      <div style={{flex:1,display:"flex",flexDirection:"column",gap:3}}>
+        <div style={{height:2,background:D.bg5,borderRadius:1}}><div style={{width:`${(prog[playing]||0)*100}%`,height:"100%",background:`linear-gradient(to right,${D.gold},${D.goldL})`,borderRadius:1,transition:"width .1s"}}/></div>
+        <div style={{fontSize:8,color:D.text4}}>{t.bpm} BPM · {t.key||""} · {t.duration||""}</div>
+      </div>
+      <div style={{display:"flex",gap:6,flexShrink:0}}>
+        <Btn ch="License →" v="gold" sm onClick={()=>setLicModal(t)}/>
+      </div>
+    </div>;})()}
+
+    {/* Track detail */}
+    {selected&&(()=>{const art=selected.artwork_url||selected.gradient||GRADS[0],isImg=art.startsWith("http");return<Modal wide title={selected.title} sub={`${selected.genre} · ${selected.mood} · ${selected.bpm} BPM`} onClose={()=>setSelected(null)}>
+      <div style={{display:"grid",gridTemplateColumns:"150px 1fr",gap:16,marginBottom:16}}>
+        <div style={{borderRadius:9,aspectRatio:"1",background:isImg?"#111":art,overflow:"hidden",boxShadow:"0 6px 28px rgba(0,0,0,.6)"}}>
+          {isImg&&<img src={art} alt="" style={{width:"100%",height:"100%",objectFit:"cover"}}/>}
+        </div>
+        <div>
+          <div style={{marginBottom:8}}><Badges t={selected}/></div>
+          <p style={{color:D.text2,fontSize:12,lineHeight:1.75,marginBottom:10}}>{selected.description}</p>
+          {selected.use_cases?.length>0&&<div style={{display:"flex",gap:5,flexWrap:"wrap",marginBottom:10}}>{selected.use_cases.map(u=><Tag key={u} label={u} c={D.text3}/>)}</div>}
+          <div style={{background:D.bg3,border:`1px solid ${D.border}`,borderRadius:6,padding:"9px 11px",marginBottom:10}}>
+            <div style={{fontSize:9,color:D.gold,letterSpacing:1.5,textTransform:"uppercase",fontWeight:700,marginBottom:5}}>Pack Includes</div>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:3}}>
+              {[["WAV Master",true],["Instrumental",selected.pack_instrumental],["Clean",selected.pack_clean],["30s Loop",selected.pack_loop30],["60s Cut",selected.pack_loop60]].map(([l,v])=><div key={l} style={{fontSize:9,color:v?D.text2:D.text4,display:"flex",alignItems:"center",gap:4}}><span style={{color:v?D.green:D.text4,fontWeight:700}}>{v?"✓":"—"}</span>{l}</div>)}
+            </div>
+          </div>
+          <div style={{display:"flex",alignItems:"center",gap:9}}>
+            <button onClick={()=>togglePlay(selected)} style={{width:34,height:34,borderRadius:"50%",background:`linear-gradient(135deg,${D.gold},${D.goldL})`,border:"none",color:"#0B0B0B",fontSize:12,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",flexShrink:0}}>{playing===selected.id?"▮▮":"▶"}</button>
+            <div style={{flex:1,height:2,background:D.bg5,borderRadius:1}}><div style={{width:`${(prog[selected.id]||0)*100}%`,height:"100%",background:`linear-gradient(to right,${D.gold},${D.goldL})`,borderRadius:1,transition:"width .1s"}}/></div>
+            <button onClick={()=>togglePlay(selected,true)} style={{background:D.bg3,border:`1px solid ${D.border2}`,color:D.text3,fontSize:8,padding:"3px 9px",borderRadius:20,cursor:"pointer",fontWeight:700,letterSpacing:.5,textTransform:"uppercase",whiteSpace:"nowrap"}}>▶▶ Hook</button>
+          </div>
+        </div>
+      </div>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:12}}>
+        {[{id:"sync",l:"Sync License",p:selected.price_sync,d:"One project"},{id:"bundle",l:"Bundle Pack",p:selected.price_bundle,d:"All 5 files"},{id:"exclusive",l:"Exclusive",p:selected.price_exclusive,d:"Full buyout"}].map(tier=><div key={tier.id} style={{background:D.bg3,border:`1px solid ${D.border2}`,borderRadius:7,padding:"11px",textAlign:"center",cursor:"pointer"}} onMouseEnter={e=>e.currentTarget.style.borderColor=D.gold} onMouseLeave={e=>e.currentTarget.style.borderColor=D.border2}>
+          <div style={{fontSize:9,fontWeight:700,color:D.text,letterSpacing:.5,marginBottom:3,textTransform:"uppercase"}}>{tier.l}</div>
+          <div style={{fontFamily:"'IBM Plex Mono',monospace",fontSize:18,fontWeight:700,color:D.gold,marginBottom:2}}>${tier.p}</div>
+          <div style={{fontSize:8,color:D.text4}}>{tier.d}</div>
+        </div>)}
+      </div>
+      <div style={{display:"flex",gap:8}}>
+        <Btn full ch="License This Track →" v="gold" onClick={()=>{setLicModal(selected);setSelected(null);}} sx={{flex:1,padding:10}}/>
+        <Btn ch="Contact Creator" v="ghost" onClick={()=>{setConF({name:"",company:"",role:"",project:"",medium:"",scene:"",notes:"",email:""});setConDone(false);setConModal(selected);setSelected(null);}} sx={{padding:10}}/>
+      </div>
+    </Modal>;})()}
+
+    {/* License modal */}
+    {licModal&&<Modal title="License This Track" sub={`"${licModal.title}"`} onClose={()=>setLicModal(null)}>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:16}}>
+        {[{id:"sync",l:"Sync",p:licModal.price_sync,d:"One project"},{id:"bundle",l:"Bundle",p:licModal.price_bundle,d:"All 5 files"},{id:"exclusive",l:"Exclusive",p:licModal.price_exclusive,d:"Full buyout"}].map(tier=><div key={tier.id} onClick={()=>setLicTier(tier.id)} style={{background:licTier===tier.id?D.gold+"14":D.bg3,border:`1px solid ${licTier===tier.id?D.gold:D.border2}`,borderRadius:7,padding:"12px",cursor:"pointer",textAlign:"center",transition:"all .15s"}}>
+          <div style={{fontSize:9,fontWeight:700,color:D.text,letterSpacing:.5,marginBottom:3,textTransform:"uppercase"}}>{tier.l}</div>
+          <div style={{fontFamily:"'IBM Plex Mono',monospace",fontSize:17,fontWeight:700,color:licTier===tier.id?D.goldL:D.text,marginBottom:2}}>${tier.p}</div>
+          <div style={{fontSize:8,color:D.text4}}>{tier.d}</div>
+        </div>)}
+      </div>
+      <div style={{height:1,background:D.border,margin:"12px 0"}}/>
+      <Fld label="Full Name *" value={buyerF.name} onChange={e=>setBuyerF(b=>({...b,name:e.target.value}))} placeholder="Chris Davis"/>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:9}}><Fld label="Label / Company" value={buyerF.company} onChange={e=>setBuyerF(b=>({...b,company:e.target.value}))} placeholder="Def Jam"/><Fld label="Artist" value={buyerF.artist} onChange={e=>setBuyerF(b=>({...b,artist:e.target.value}))} placeholder="Stage name"/></div>
+      <Fld label="Project" value={buyerF.project} onChange={e=>setBuyerF(b=>({...b,project:e.target.value}))} placeholder="Debut EP"/>
+      <Fld label="Email *" type="email" value={buyerF.email} onChange={e=>setBuyerF(b=>({...b,email:e.target.value}))} placeholder="you@label.com"/>
+      <Btn full ch="Generate Contract →" v="gold" disabled={!buyerF.name||!buyerF.email} sx={{marginTop:5,padding:10,fontSize:12}} onClick={()=>{setCtModal({text:contract(licModal,licTier,buyerF)});setLicModal(null);}}/>
+    </Modal>}
+
+    {/* Contact modal */}
+    {conModal&&<Modal title="Contact Creator" sub={`Sync inquiry for "${conModal.title}"`} onClose={()=>setConModal(null)}>
+      {conDone?<div style={{textAlign:"center",padding:"16px 0"}}>
+        <div style={{width:42,height:42,borderRadius:"50%",background:D.gold+"18",border:`1px solid ${D.gold+"38"}`,display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 12px",fontSize:18,color:D.gold}}>✓</div>
+        <h3 style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:20,letterSpacing:2,color:D.text,marginBottom:6}}>Request Sent</h3>
+        <p style={{color:D.text3,fontSize:12,lineHeight:1.9}}>Expect a response at <b style={{color:D.text}}>{conF.email}</b> within 48 hours.</p>
+        <Btn ch="Done" v="gold" sx={{marginTop:14}} onClick={()=>setConModal(null)}/>
+      </div>:<>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:9}}><Fld label="Full Name *" value={conF.name} onChange={e=>setConF(f=>({...f,name:e.target.value}))} placeholder="Jordan Ellis"/><Fld label="Company *" value={conF.company} onChange={e=>setConF(f=>({...f,company:e.target.value}))} placeholder="Paramount"/></div>
+        <Fld label="Your Role" as="select" value={conF.role} onChange={e=>setConF(f=>({...f,role:e.target.value}))}><option value="">Select...</option>{["Music Supervisor","Director","Producer","Ad Agency","Game Studio","Creator","Other"].map(r=><option key={r}>{r}</option>)}</Fld>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:9}}><Fld label="Project" value={conF.project} onChange={e=>setConF(f=>({...f,project:e.target.value}))} placeholder="Feature Film"/><Fld label="Medium" as="select" value={conF.medium} onChange={e=>setConF(f=>({...f,medium:e.target.value}))}><option value="">Select...</option>{["Film","TV","Streaming","Ad","YouTube","Video Game","Other"].map(m=><option key={m}>{m}</option>)}</Fld></div>
+        <Fld label="Scene / Use" value={conF.scene} onChange={e=>setConF(f=>({...f,scene:e.target.value}))} placeholder="Opening title, villain entrance..."/>
+        <Fld as="textarea" label="Notes" value={conF.notes} onChange={e=>setConF(f=>({...f,notes:e.target.value}))}/>
+        <Fld label="Email *" type="email" value={conF.email} onChange={e=>setConF(f=>({...f,email:e.target.value}))} placeholder="you@studio.com"/>
+        <Btn full ch="Submit Inquiry →" v="gold" disabled={!conF.name||!conF.email||!conF.company} sx={{marginTop:5,padding:10,fontSize:12}} onClick={submitCon}/>
+      </>}
+    </Modal>}
+
+    {/* Contract modal */}
+    {ctModal&&<Modal wide title="Licensing Agreement" sub="Download · Sign · Return to creator" onClose={()=>setCtModal(null)}>
+      <div style={{display:"flex",gap:7,marginBottom:10}}>
+        <Btn ch="⬇ Download" v="gold" onClick={()=>{const b=new Blob([ctModal.text],{type:"text/plain"});const a=document.createElement("a");a.href=URL.createObjectURL(b);a.download=`CURATED_${uid()}.txt`;a.click();}}/>
+        <Btn ch="Copy" v="ghost" onClick={()=>navigator.clipboard?.writeText(ctModal.text)}/>
+      </div>
+      <pre style={{background:D.bg3,border:`1px solid ${D.border}`,borderRadius:6,padding:13,fontSize:9,lineHeight:1.85,color:D.text3,overflowX:"auto",whiteSpace:"pre-wrap",fontFamily:"'IBM Plex Mono',monospace",maxHeight:380,overflowY:"auto"}}>{ctModal.text}</pre>
+      <p style={{marginTop:8,color:D.text4,fontSize:9,lineHeight:1.7}}>⚠ For deals above $10,000 consult a licensed music attorney.</p>
+    </Modal>}
+  </>;
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
+</script>
+</body>
+</html>
